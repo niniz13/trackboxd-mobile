@@ -255,6 +255,7 @@ export default function SettingsScreen() {
                 ],
               )
             }>
+            <TBIcon name="trash" size={16} color="rgba(255,94,125,0.5)" />
             <Text style={styles.deleteBtnText}>Supprimer mon compte</Text>
           </TouchableOpacity>
         </ScrollView>
@@ -293,6 +294,6 @@ const styles = StyleSheet.create({
   googleText: { flex: 1, fontSize: 13.5, color: C.textMuted, lineHeight: 20 },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 15, paddingHorizontal: 16, borderRadius: 14, backgroundColor: 'rgba(255,94,125,0.1)', borderWidth: 1, borderColor: 'rgba(255,94,125,0.25)', marginTop: 10 },
   logoutText: { fontFamily: F.headlineSemi, fontWeight: '700', fontSize: 15, color: '#ff5e7d' },
-  deleteBtn: { alignItems: 'center', paddingVertical: 14, marginTop: 8 },
-  deleteBtnText: { fontFamily: F.mono, fontSize: 12, color: 'rgba(255,94,125,0.45)', textDecorationLine: 'underline' },
+  deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 15, paddingHorizontal: 16, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,94,125,0.2)', marginTop: 8 },
+  deleteBtnText: { fontFamily: F.headlineSemi, fontWeight: '700', fontSize: 15, color: 'rgba(255,94,125,0.5)' },
 });
