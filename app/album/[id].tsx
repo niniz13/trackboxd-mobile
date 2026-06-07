@@ -38,6 +38,8 @@ function UserAvatar({ user, size }: { user: FeedEntry['user']; size: number }) {
 
 const DEFAULT_PAL: AlbumPalette = { bg: '#1a0a2e', ink: '#fff', c1: '#7b2dff', c2: '#ff2d95', c3: '#2d6bff', style: 'rings' };
 
+interface DynamicPal { bg: string; c1: string; c2: string; ink: string; }
+
 export default function AlbumScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
@@ -47,6 +49,7 @@ export default function AlbumScreen() {
   const [album, setAlbum]       = useState<AlbumData | null>(null);
   const [reviews, setReviews]   = useState<FeedEntry[]>([]);
   const [loading, setLoading]   = useState(true);
+  const [dynPal, setDynPal]     = useState<DynamicPal | null>(null);
 
   // my rating/like/review state
   const [myRating, setMyRating] = useState(0);
@@ -81,6 +84,10 @@ export default function AlbumScreen() {
         setMyReview(mine.review ?? '');
         setSaved(true);
       }
+      // fetch dynamic palette from cover (non-blocking)
+      apiJson<DynamicPal>(`/api/spotify/album/${spotifyId}/colors`)
+        .then(setDynPal)
+        .catch(() => {});
     } catch { /* show error state */ }
     finally { setLoading(false); }
   }, [id, spotifyId, user?.id, loadReviews]);
@@ -154,6 +161,7 @@ export default function AlbumScreen() {
   }
 
   const p = album.pal ?? DEFAULT_PAL;
+  const banner = dynPal ?? p;
 
   const dist = [1, 2, 3, 4, 5].map(star => reviews.filter(r => Math.round(r.rating) === star).length);
   const maxDist = Math.max(...dist, 1);
@@ -169,28 +177,28 @@ export default function AlbumScreen() {
       <View style={{ flex: 1, backgroundColor: C.bg }}>
         <ScrollView contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
           {/* gradient header */}
-          <LinearGradient colors={[p.bg, p.bg, C.bg]} locations={[0, 0.4, 1]} style={styles.headerGrad}>
-            <LinearGradient colors={[`${p.c1}44`, 'transparent']} style={[StyleSheet.absoluteFill, { height: 280 }]} />
+          <LinearGradient colors={[banner.bg, banner.bg, C.bg]} locations={[0, 0.4, 1]} style={styles.headerGrad}>
+            <LinearGradient colors={[`${banner.c1}44`, 'transparent']} style={[StyleSheet.absoluteFill, { height: 280 }]} />
 
             <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
-              <TouchableOpacity onPress={() => router.back()} style={[styles.glassBtn, { borderColor: `${p.ink}30` }]}>
-                <TBIcon name="back" size={22} color={p.ink} />
+              <TouchableOpacity onPress={() => router.back()} style={[styles.glassBtn, { borderColor: `${banner.ink}30` }]}>
+                <TBIcon name="back" size={22} color={banner.ink} />
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.glassBtn, { borderColor: `${p.ink}30` }]}>
-                <TBIcon name="share" size={19} color={p.ink} />
+              <TouchableOpacity style={[styles.glassBtn, { borderColor: `${banner.ink}30` }]}>
+                <TBIcon name="share" size={19} color={banner.ink} />
               </TouchableOpacity>
             </View>
 
             <View style={styles.hero}>
-              <View style={[styles.coverShadow, { shadowColor: p.c1 }]}>
+              <View style={[styles.coverShadow, { shadowColor: banner.c1 }]}>
                 {album.coverUrl
                   ? <Image source={{ uri: album.coverUrl }} style={{ width: 188, height: 188, borderRadius: 18 }} />
-                  : <View style={{ width: 188, height: 188, borderRadius: 18, backgroundColor: p.c1 }} />
+                  : <View style={{ width: 188, height: 188, borderRadius: 18, backgroundColor: banner.c1 }} />
                 }
               </View>
-              <Text style={[styles.albumTitle, { color: p.ink }]}>{album.title}</Text>
-              <Text style={[styles.albumArtist, { color: p.ink }]}>{album.artist}</Text>
-              <Text style={[styles.albumMeta, { color: p.ink }]}>
+              <Text style={[styles.albumTitle, { color: banner.ink }]}>{album.title}</Text>
+              <Text style={[styles.albumArtist, { color: banner.ink }]}>{album.artist}</Text>
+              <Text style={[styles.albumMeta, { color: banner.ink }]}>
                 {album.type.toUpperCase()} · {album.year} · {album.len} TRACKS{album.genre ? ` · ${album.genre.toUpperCase()}` : ''}
               </Text>
             </View>
@@ -207,7 +215,7 @@ export default function AlbumScreen() {
                 <View key={i} style={styles.distRow}>
                   <Text style={styles.distLabel}>{5 - i}</Text>
                   <View style={styles.distBarBg}>
-                    <View style={[styles.distBarFill, { width: `${(v / maxDist) * 100}%` as any, backgroundColor: p.c1 }]} />
+                    <View style={[styles.distBarFill, { width: `${(v / maxDist) * 100}%` as any, backgroundColor: 'rgba(255,255,255,0.18)' }]} />
                   </View>
                 </View>
               ))}
@@ -222,7 +230,7 @@ export default function AlbumScreen() {
                 value={myRating}
                 onChange={v => { setMyRating(v); setSaved(false); }}
                 size={36}
-                color={myRating > 0 ? p.c1 : 'rgba(255,255,255,0.6)'}
+                color={myRating > 0 ? '#fff' : 'rgba(255,255,255,0.35)'}
               />
               <View style={styles.dividerV} />
               <TouchableOpacity onPress={() => { setMyLiked(v => !v); setSaved(false); }} style={styles.likeBtn}>
@@ -231,7 +239,7 @@ export default function AlbumScreen() {
               </TouchableOpacity>
               {isDirty && (
                 <TouchableOpacity onPress={handleQuickSave} disabled={saving}
-                  style={[styles.saveBtn, { backgroundColor: p.c1 }]}>
+                  style={[styles.saveBtn, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
                   {saving
                     ? <ActivityIndicator color="#fff" size="small" />
                     : <Text style={styles.saveBtnText}>Log</Text>
@@ -270,7 +278,7 @@ export default function AlbumScreen() {
               <Text style={styles.sectionLabel}>Tracklist · {album.len}</Text>
               {album.tracks.map((t, i) => (
                 <View key={i} style={styles.trackRow}>
-                  <Text style={[styles.trackNum, { color: p.c1 }]}>{String(i + 1).padStart(2, '0')}</Text>
+                  <Text style={[styles.trackNum, { color: 'rgba(255,255,255,0.3)' }]}>{String(i + 1).padStart(2, '0')}</Text>
                   <Text style={styles.trackName} numberOfLines={1}>{t}</Text>
                 </View>
               ))}
@@ -289,7 +297,7 @@ export default function AlbumScreen() {
                       <Text style={styles.reviewUser}>{r.user.name}</Text>
                       <Text style={styles.reviewHandle}>@{r.user.handle}</Text>
                     </View>
-                    <TBStars rating={r.rating} size={12} color={p.c1} />
+                    <TBStars rating={r.rating} size={12} color="#fff" />
                   </View>
                   <Text style={styles.reviewText}>{r.review}</Text>
                 </View>
@@ -310,7 +318,7 @@ export default function AlbumScreen() {
               <View style={styles.modalAlbumRow}>
                 {album.coverUrl
                   ? <Image source={{ uri: album.coverUrl }} style={{ width: 48, height: 48, borderRadius: 8 }} />
-                  : <View style={{ width: 48, height: 48, borderRadius: 8, backgroundColor: p.c1 }} />
+                  : <View style={{ width: 48, height: 48, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.1)' }} />
                 }
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <Text style={styles.modalAlbumTitle} numberOfLines={1}>{album.title}</Text>
@@ -327,7 +335,7 @@ export default function AlbumScreen() {
                   value={ratingDraft}
                   onChange={setRatingDraft}
                   size={34}
-                  color={ratingDraft > 0 ? p.c1 : 'rgba(255,255,255,0.4)'}
+                  color={ratingDraft > 0 ? '#fff' : 'rgba(255,255,255,0.35)'}
                 />
                 <View style={styles.modalDividerV} />
                 <TouchableOpacity onPress={() => setLikedDraft(v => !v)} style={styles.modalLikeBtn}>
@@ -357,7 +365,7 @@ export default function AlbumScreen() {
                   <Text style={styles.modalCancelText}>Annuler</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.modalConfirm, { backgroundColor: p.c1 }, (!ratingDraft || saving) && styles.modalConfirmDisabled]}
+                  style={[styles.modalConfirm, { backgroundColor: C.accent }, (!ratingDraft || saving) && styles.modalConfirmDisabled]}
                   onPress={handleSubmitReview}
                   disabled={!ratingDraft || saving}>
                   {saving
