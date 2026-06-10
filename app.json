@@ -7,8 +7,24 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "scheme": "trackboxd",
-    "ios": { "supportsTablet": false },
-    "android": { "adaptiveIcon": { "backgroundColor": "#0c0b0e" } },
-    "plugins": ["expo-router", "expo-font"]
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0c0b0e"
+      },
+      "package": "com.niniz.trackboxdmobile"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d66859bb-96ee-4761-9201-2134409f5778"
+      }
+    }
   }
 }
