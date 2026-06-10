@@ -23,3 +23,13 @@ TBAvatar et TBCover sont des composants orphelins (plus importés) qui dépenden
 
 **Why:** Continuer l'intégration initiée partiellement — auth + feed + discover étaient déjà connectés.
 **How to apply:** Si de nouveaux écrans sont ajoutés, toujours utiliser `apiJson` de `constants/api.ts` avec le Bearer token auto-attaché.
+
+## Nouvelles fonctionnalités ajoutées depuis le design (juin 2026)
+
+- **Profil — streak hebdomadaire** : badge flamme 🔥 + "X sem." à côté du handle. Calculé dans `/api/user/profile` GET (backend).
+- **Profil — abonnés/abonnements** : compteurs affichés inline à droite du nom/avatar. Données dans `/api/user/profile`.
+- **Profil — "Mis en avant"** : jusqu'à 5 albums épinglés sur le profil. Picker bottom-sheet (FlatList 4 colonnes). Sauvegarde via `PUT /api/user/highlights`. Données retournées par `/api/user/profile`.
+- **Profil — onglet Favoris** : grid 3 colonnes de tous les albums likés (reviews.filter(r => r.liked)).
+- **Profil — ordre des onglets** : Journal · Favoris · Listes · Stats (avant : Diary · Stats · Listes).
+- **Profil — Stats** : cartes Albums / Cette année / Note moy. ajoutées en haut de l'onglet Stats.
+- **TBIcon** : icône `flame` ajoutée.
