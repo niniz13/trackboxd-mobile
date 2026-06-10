@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Animated, Easing, View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -55,14 +55,24 @@ export default function AlbumScreen() {
   const [myRating, setMyRating] = useState(0);
   const [myLiked, setMyLiked]   = useState(false);
   const [myReview, setMyReview] = useState('');
-  const [saved, setSaved]       = useState(false);
   const [saving, setSaving]     = useState(false);
+  const [saveOk, setSaveOk]     = useState(false);
 
   // review modal state
   const [showModal, setShowModal]     = useState(false);
   const [ratingDraft, setRatingDraft] = useState(0);
   const [likedDraft, setLikedDraft]   = useState(false);
   const [reviewDraft, setReviewDraft] = useState('');
+
+  // auto-save refs
+  const userInteracted = useRef(false);
+  const debounceRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // animation refs
+  const starBounce   = useRef(new Animated.Value(1)).current;
+  const flashOpacity = useRef(new Animated.Value(0)).current;
+  const heartBounce  = useRef(new Animated.Value(1)).current;
+  const particles    = useRef(Array.from({ length: 8 }, () => new Animated.Value(0))).current;
 
   const loadReviews = useCallback(async () => {
     const data = await apiJson<FeedEntry[]>(`/api/feed?albumId=${id}`);
@@ -82,8 +92,10 @@ export default function AlbumScreen() {
         setMyRating(mine.rating);
         setMyLiked(mine.liked);
         setMyReview(mine.review ?? '');
-        setSaved(true);
+        setSaveOk(true);
       }
+      // mark initial load complete so auto-save doesn't fire on pre-population
+      userInteracted.current = false;
       // fetch dynamic palette from cover (non-blocking)
       apiJson<DynamicPal>(`/api/spotify/album/${spotifyId}/colors`)
         .then(setDynPal)
@@ -94,6 +106,53 @@ export default function AlbumScreen() {
 
   useEffect(() => { load(); }, [load]);
 
+  const saveToApi = useCallback(async (r: number, l: boolean, rv: string) => {
+    if (!album) return;
+    if (!r && !l && !rv.trim()) return;
+    setSaving(true);
+    setSaveOk(false);
+    try {
+      await apiJson('/api/reviews', {
+        method: 'POST',
+        body: JSON.stringify({
+          albumId: album.id, albumTitle: album.title, albumArtist: album.artist,
+          albumCoverUrl: album.coverUrl ?? null, albumGenre: album.genre || null,
+          rating: r, liked: l, review: rv,
+        }),
+      });
+      setSaveOk(true);
+    } catch { /* ignore */ }
+    finally { setSaving(false); }
+  }, [album]);
+
+  // Auto-save when user changes rating or liked
+  useEffect(() => {
+    if (!userInteracted.current) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      saveToApi(myRating, myLiked, myReview);
+    }, 500);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [myRating, myLiked]);
+
+  const triggerRatingAnimation = useCallback(() => {
+    particles.forEach(p => p.setValue(0));
+    starBounce.setValue(1.22);
+    Animated.spring(starBounce, { toValue: 1, useNativeDriver: true, damping: 5, stiffness: 200, mass: 0.5 }).start();
+    Animated.sequence([
+      Animated.timing(flashOpacity, { toValue: 0.22, duration: 55, useNativeDriver: true }),
+      Animated.timing(flashOpacity, { toValue: 0, duration: 480, useNativeDriver: true, easing: Easing.out(Easing.cubic) }),
+    ]).start();
+    Animated.parallel(
+      particles.map(p => Animated.timing(p, { toValue: 1, duration: 580, useNativeDriver: true, easing: Easing.out(Easing.cubic) }))
+    ).start();
+  }, []);
+
+  const triggerHeartAnimation = useCallback((toLiked: boolean) => {
+    heartBounce.setValue(toLiked ? 1.45 : 0.72);
+    Animated.spring(heartBounce, { toValue: 1, useNativeDriver: true, damping: 5, stiffness: 260, mass: 0.45 }).start();
+  }, []);
+
   const openModal = () => {
     setRatingDraft(myRating);
     setLikedDraft(myLiked);
@@ -101,25 +160,8 @@ export default function AlbumScreen() {
     setShowModal(true);
   };
 
-  const handleQuickSave = async () => {
-    if (!album || !myRating) return;
-    setSaving(true);
-    try {
-      await apiJson('/api/reviews', {
-        method: 'POST',
-        body: JSON.stringify({
-          albumId: album.id, albumTitle: album.title, albumArtist: album.artist,
-          albumCoverUrl: album.coverUrl ?? null, albumGenre: album.genre || null,
-          rating: myRating, liked: myLiked, review: myReview,
-        }),
-      });
-      setSaved(true);
-    } catch { /* ignore */ }
-    finally { setSaving(false); }
-  };
-
   const handleSubmitReview = async () => {
-    if (!album || !ratingDraft) return;
+    if (!album || saving) return;
     setSaving(true);
     try {
       await apiJson('/api/reviews', {
@@ -133,7 +175,8 @@ export default function AlbumScreen() {
       setMyRating(ratingDraft);
       setMyLiked(likedDraft);
       setMyReview(reviewDraft.trim());
-      setSaved(true);
+      setSaveOk(true);
+      userInteracted.current = false; // prevent auto-save re-trigger after modal update
       setShowModal(false);
       const fresh = await loadReviews();
       setReviews(fresh);
@@ -163,14 +206,19 @@ export default function AlbumScreen() {
   const p = album.pal ?? DEFAULT_PAL;
   const banner = dynPal ?? p;
 
-  const dist = [1, 2, 3, 4, 5].map(star => reviews.filter(r => Math.round(r.rating) === star).length);
+  // Merge the user's live rating so stats update instantly without a reload
+  const statsReviews = user
+    ? [
+        ...reviews.filter(r => r.userId !== user.id),
+        ...(myRating > 0 ? [{ rating: myRating } as FeedEntry] : []),
+      ]
+    : reviews;
+  const dist = [1, 2, 3, 4, 5].map(star => statsReviews.filter(r => Math.round(r.rating) === star).length);
   const maxDist = Math.max(...dist, 1);
-  const avgRating = reviews.length
-    ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1)
+  const avgRating = statsReviews.length
+    ? (statsReviews.reduce((s, r) => s + r.rating, 0) / statsReviews.length).toFixed(1)
     : '—';
   const textReviews = reviews.filter(r => r.review?.trim());
-  const hasMyReview = myRating > 0;
-  const isDirty = myRating > 0 && !saved;
 
   return (
     <>
@@ -183,9 +231,6 @@ export default function AlbumScreen() {
             <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
               <TouchableOpacity onPress={() => router.back()} style={[styles.glassBtn, { borderColor: `${banner.ink}30` }]}>
                 <TBIcon name="back" size={22} color={banner.ink} />
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.glassBtn, { borderColor: `${banner.ink}30` }]}>
-                <TBIcon name="share" size={19} color={banner.ink} />
               </TouchableOpacity>
             </View>
 
@@ -208,7 +253,7 @@ export default function AlbumScreen() {
           <View style={styles.ratingRow}>
             <View style={styles.ratingBig}>
               <Text style={styles.ratingNum}>{avgRating}</Text>
-              <Text style={styles.ratingVotes}>{reviews.length} rating{reviews.length !== 1 ? 's' : ''}</Text>
+              <Text style={styles.ratingVotes}>{statsReviews.length} rating{statsReviews.length !== 1 ? 's' : ''}</Text>
             </View>
             <View style={styles.distBars}>
               {dist.slice().reverse().map((v, i) => (
@@ -225,37 +270,78 @@ export default function AlbumScreen() {
           {/* my rating card */}
           {user && (
             <View style={styles.myRatingCard}>
-              <Text style={styles.myRatingLabel}>{myRating > 0 ? 'Ma note' : 'Noter'}</Text>
-              <TBStarInput
-                value={myRating}
-                onChange={v => { setMyRating(v); setSaved(false); }}
-                size={36}
-                color={myRating > 0 ? '#fff' : 'rgba(255,255,255,0.35)'}
+              {/* accent flash on rating */}
+              <Animated.View
+                style={[StyleSheet.absoluteFill, { borderRadius: 16, backgroundColor: banner.c1, opacity: flashOpacity }]}
+                pointerEvents="none"
               />
+
+              <View style={styles.myRatingLabelRow}>
+                <Text style={styles.myRatingLabel}>{myRating > 0 ? 'Ma note' : 'Noter'}</Text>
+                {saving && <ActivityIndicator size="small" color="rgba(255,255,255,0.35)" style={{ marginLeft: 6 }} />}
+                {!saving && saveOk && <TBIcon name="check" size={11} color="#4ade80" strokeWidth={2.5} />}
+              </View>
+
+              <Animated.View style={{ transform: [{ scale: starBounce }] }}>
+                <TBStarInput
+                  value={myRating}
+                  onChange={v => {
+                    userInteracted.current = true;
+                    setSaveOk(false);
+                    setMyRating(v);
+                    triggerRatingAnimation();
+                  }}
+                  size={36}
+                  color={myRating > 0 ? '#fff' : 'rgba(255,255,255,0.35)'}
+                />
+              </Animated.View>
+
               <View style={styles.dividerV} />
-              <TouchableOpacity onPress={() => { setMyLiked(v => !v); setSaved(false); }} style={styles.likeBtn}>
-                <TBIcon name="heart" size={28} color={myLiked ? C.liked : 'rgba(255,255,255,0.4)'} fill={myLiked ? C.liked : 'none'} />
+
+              <TouchableOpacity
+                onPress={() => {
+                  userInteracted.current = true;
+                  setSaveOk(false);
+                  const next = !myLiked;
+                  setMyLiked(next);
+                  triggerHeartAnimation(next);
+                }}
+                style={styles.likeBtn}
+              >
+                <Animated.View style={{ transform: [{ scale: heartBounce }] }}>
+                  <TBIcon name="heart" size={28} color={myLiked ? C.liked : 'rgba(255,255,255,0.4)'} fill={myLiked ? C.liked : 'none'} />
+                </Animated.View>
                 <Text style={[styles.likeLabel, myLiked && { color: C.liked }]}>{myLiked ? 'Aimé' : 'Aimer'}</Text>
               </TouchableOpacity>
-              {isDirty && (
-                <TouchableOpacity onPress={handleQuickSave} disabled={saving}
-                  style={[styles.saveBtn, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
-                  {saving
-                    ? <ActivityIndicator color="#fff" size="small" />
-                    : <Text style={styles.saveBtnText}>Log</Text>
-                  }
-                </TouchableOpacity>
-              )}
-              {saved && !isDirty && (
-                <View style={[styles.saveBtn, { backgroundColor: 'rgba(255,255,255,0.08)' }]}>
-                  <Text style={styles.saveBtnText}>✓</Text>
-                </View>
-              )}
+
+              {/* particle burst */}
+              <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]} pointerEvents="none">
+                {particles.map((anim, i) => {
+                  const angle = (i / particles.length) * Math.PI * 2 - Math.PI / 2;
+                  const d = 52;
+                  const tx = anim.interpolate({ inputRange: [0, 1], outputRange: [0, Math.cos(angle) * d] });
+                  const ty = anim.interpolate({ inputRange: [0, 1], outputRange: [0, Math.sin(angle) * d] });
+                  const opacity = anim.interpolate({ inputRange: [0, 0.12, 0.65, 1], outputRange: [0, 1, 1, 0] });
+                  const scale = anim.interpolate({ inputRange: [0, 0.14, 1], outputRange: [0, 1.3, 0.6] });
+                  const sz = i % 2 === 0 ? 7 : 5;
+                  return (
+                    <Animated.View
+                      key={i}
+                      style={{
+                        position: 'absolute',
+                        width: sz, height: sz, borderRadius: sz / 2,
+                        backgroundColor: i % 2 === 0 ? banner.c1 : '#fff',
+                        opacity, transform: [{ translateX: tx }, { translateY: ty }, { scale }],
+                      }}
+                    />
+                  );
+                })}
+              </View>
             </View>
           )}
 
-          {/* write / edit review CTA */}
-          {user && hasMyReview && (
+          {/* write / edit review CTA — always visible when logged in */}
+          {user && (
             <TouchableOpacity style={styles.reviewCta} onPress={openModal} activeOpacity={0.75}>
               {myReview ? (
                 <View style={{ flex: 1 }}>
@@ -365,9 +451,9 @@ export default function AlbumScreen() {
                   <Text style={styles.modalCancelText}>Annuler</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.modalConfirm, { backgroundColor: C.accent }, (!ratingDraft || saving) && styles.modalConfirmDisabled]}
+                  style={[styles.modalConfirm, { backgroundColor: C.accent }, saving && styles.modalConfirmDisabled]}
                   onPress={handleSubmitReview}
-                  disabled={!ratingDraft || saving}>
+                  disabled={saving}>
                   {saving
                     ? <ActivityIndicator color="#fff" size="small" />
                     : <Text style={styles.modalConfirmText}>Publier</Text>
@@ -400,13 +486,12 @@ const styles = StyleSheet.create({
   distLabel: { fontFamily: F.mono, fontSize: 10, color: C.textMuted, width: 10 },
   distBarBg: { flex: 1, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.1)', overflow: 'hidden' },
   distBarFill: { height: '100%', borderRadius: 2 },
-  myRatingCard: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 18, marginTop: 20, padding: 16, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: C.border, gap: 14 },
-  myRatingLabel: { fontFamily: F.mono, fontSize: 9.5, letterSpacing: 1.2, color: C.textMuted, textTransform: 'uppercase', position: 'absolute', top: 10, left: 16 },
-  dividerV: { width: 1, height: 36, backgroundColor: 'rgba(255,255,255,0.12)', marginTop: 12 },
-  likeBtn: { alignItems: 'center', gap: 4, marginTop: 12 },
+  myRatingCard: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 18, marginTop: 20, padding: 16, paddingTop: 28, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: C.border, gap: 14 },
+  myRatingLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 5, position: 'absolute', top: 10, left: 16 },
+  myRatingLabel: { fontFamily: F.mono, fontSize: 9.5, letterSpacing: 1.2, color: C.textMuted, textTransform: 'uppercase' },
+  dividerV: { width: 1, height: 36, backgroundColor: 'rgba(255,255,255,0.12)' },
+  likeBtn: { alignItems: 'center', gap: 4 },
   likeLabel: { fontFamily: F.mono, fontSize: 9, color: 'rgba(255,255,255,0.45)', letterSpacing: 0.5 },
-  saveBtn: { marginLeft: 'auto', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
-  saveBtnText: { fontFamily: F.headlineSemi, fontWeight: '700', fontSize: 13, color: '#fff' },
   // review CTA
   reviewCta: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 18, marginTop: 10, padding: 14, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: C.border, gap: 10 },
   reviewCtaHint: { fontFamily: F.mono, fontSize: 9.5, letterSpacing: 1, color: C.textMuted, textTransform: 'uppercase', marginBottom: 4 },

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { TBIcon } from './TBIcon';
 
@@ -28,24 +28,27 @@ export function TBStars({ rating, size = 14, color = '#fff' }: StarsProps) {
 
 interface InputProps { value: number; onChange: (v: number) => void; size?: number; color?: string; }
 export function TBStarInput({ value, onChange, size = 40, color = '#fff' }: InputProps) {
-  const [hover, setHover] = useState<number | null>(null);
-  const shown = hover ?? value;
   return (
     <View style={styles.row}>
-      {[1,2,3,4,5].map(i => {
-        const isFull = i <= Math.floor(shown);
-        const isHalf = Math.abs(i - shown) < 0.6 && shown < i;
+      {[1, 2, 3, 4, 5].map(i => {
+        const isFull = i <= Math.floor(value);
+        const isHalf = value === i - 0.5;
         return (
-          <TouchableOpacity key={i} onPress={() => onChange(i)} activeOpacity={0.7}>
-            <View style={{ width: size, height: size, position: 'relative' }}>
-              <TBIcon name="star" size={size} color={color} fill="none" strokeWidth={1.4} />
-              {isFull && (
-                <View style={[StyleSheet.absoluteFill]}>
-                  <TBIcon name="star" size={size} color={color} fill={color} strokeWidth={1.4} />
-                </View>
-              )}
+          <View key={i} style={{ width: size, height: size, position: 'relative' }}>
+            {/* empty star */}
+            <TBIcon name="star" size={size} color={color} fill="none" strokeWidth={1.4} />
+            {/* filled portion: full or left-half clip */}
+            {(isFull || isHalf) && (
+              <View style={[StyleSheet.absoluteFill, { overflow: 'hidden', width: isHalf ? size / 2 : size }]}>
+                <TBIcon name="star" size={size} color={color} fill={color} strokeWidth={1.4} />
+              </View>
+            )}
+            {/* two invisible tap zones: left = half star, right = full star */}
+            <View style={[StyleSheet.absoluteFill, { flexDirection: 'row' }]}>
+              <TouchableOpacity style={{ flex: 1 }} onPress={() => onChange(value === i - 0.5 ? 0 : i - 0.5)} activeOpacity={0.7} />
+              <TouchableOpacity style={{ flex: 1 }} onPress={() => onChange(value === i ? 0 : i)} activeOpacity={0.7} />
             </View>
-          </TouchableOpacity>
+          </View>
         );
       })}
     </View>

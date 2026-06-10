@@ -28,6 +28,7 @@ export function TBIcon({ name, size = 24, color = '#fff', fill = 'none', strokeW
     case 'profile': return <Svg {...p}><Circle {...s} cx="12" cy="8" r="4"/><Path {...s} d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></Svg>;
     case 'music':   return <Svg {...p}><Path {...s} d="M9 18V5l12-2v13"/><Circle {...s} cx="6" cy="18" r="3"/><Circle {...s} cx="18" cy="16" r="3"/></Svg>;
     case 'chevron': return <Svg {...p}><Path {...s} d="M9 6l6 6-6 6"/></Svg>;
+    case 'flame':   return <Svg {...p}><Path stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" fill={fill} d="M12 2c0 0-5 4-5 9a5 5 0 0010 0c0-2.5-1.5-4.5-3-6 0 2-1.5 3-2 3.5C12 6.5 12 4 12 2z"/></Svg>;
     case 'trash':   return <Svg {...p}><Path {...s} d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></Svg>;
     default:        return null;
   }

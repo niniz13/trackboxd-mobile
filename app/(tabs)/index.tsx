@@ -59,12 +59,20 @@ function FeedItem({ entry }: { entry: FeedEntry }) {
     });
   };
 
+  const goToUser = () => {
+    if (entry.user.handle) router.push(`/user/${entry.user.handle}` as any);
+  };
+
   return (
     <View style={styles.item}>
       <View style={styles.row}>
-        <UserAvatar user={entry.user} size={30} />
+        <TouchableOpacity onPress={goToUser} activeOpacity={0.8}>
+          <UserAvatar user={entry.user} size={30} />
+        </TouchableOpacity>
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', marginLeft: 10 }}>
-          <Text style={styles.userName}>{entry.user.name} </Text>
+          <TouchableOpacity onPress={goToUser} activeOpacity={0.8}>
+            <Text style={styles.userName}>{entry.user.name} </Text>
+          </TouchableOpacity>
           <Text style={styles.action}>{entry.review ? 'a reviewé' : 'a noté'}</Text>
         </View>
         <Text style={styles.when}>{timeAgo(entry.createdAt)}</Text>

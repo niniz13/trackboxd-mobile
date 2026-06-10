@@ -17,6 +17,7 @@ interface ActivityItem {
   albumCoverUrl?: string | null;
   commentText?: string;
   reviewId?: string;
+  isFollowing?: boolean;
 }
 
 const iconForKind = {
@@ -60,16 +61,52 @@ function AlbumThumb({ url, size }: { url?: string | null; size: number }) {
   return <View style={{ width: size, height: size, borderRadius: 7, backgroundColor: '#2c0a3e' }} />;
 }
 
+function FollowBackBtn({ userId, initialFollowing }: { userId: string; initialFollowing: boolean }) {
+  const [following, setFollowing] = useState(initialFollowing);
+  const [toggling, setToggling]   = useState(false);
+
+  const toggle = async () => {
+    const next = !following;
+    setFollowing(next);
+    setToggling(true);
+    try {
+      await apiJson(`/api/users/${userId}/follow`, { method: next ? 'POST' : 'DELETE' });
+    } catch {
+      setFollowing(!next);
+    } finally { setToggling(false); }
+  };
+
+  if (following && !toggling) return null;
+  return (
+    <TouchableOpacity
+      style={styles.followBtn}
+      onPress={toggle}
+      disabled={toggling}
+      activeOpacity={0.8}
+    >
+      {toggling
+        ? <ActivityIndicator size="small" color={C.bg} />
+        : <Text style={styles.followBtnText}>Suivre</Text>
+      }
+    </TouchableOpacity>
+  );
+}
+
 export default function ActivityScreen() {
   const insets = useSafeAreaInsets();
-  const [items, setItems]         = useState<ActivityItem[]>([]);
-  const [loading, setLoading]     = useState(true);
+  const [items, setItems]           = useState<ActivityItem[]>([]);
+  const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
+  const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const data = await apiJson<ActivityItem[]>('/api/activity');
+      const [data, following] = await Promise.all([
+        apiJson<ActivityItem[]>('/api/activity'),
+        apiJson<{ _id: string }[]>('/api/users/me/following'),
+      ]);
       setItems(data);
+      setFollowingIds(new Set(following.map(u => u._id)));
     } catch { setItems([]); }
     finally { setLoading(false); }
   }, []);
@@ -94,16 +131,27 @@ export default function ActivityScreen() {
         </View>
       ) : items.map(item => {
         const { name, color } = iconForKind[item.kind];
+        const goToUser = () => {
+          if (item.user.handle) router.push(`/user/${item.user.handle}` as any);
+        };
+        const goToTarget = item.albumId
+          ? () => router.push(`/album/${item.albumId}`)
+          : item.kind === 'follow'
+            ? goToUser
+            : undefined;
+
         return (
-          <TouchableOpacity key={item.id} style={styles.item} activeOpacity={0.7}
-            onPress={item.albumId ? () => router.push(`/album/${item.albumId}`) : undefined}>
-            <View style={styles.avatarWrap}>
-              <UserAvatar user={item.user} size={44} />
-              <View style={[styles.badge, { backgroundColor: color }]}>
-                <TBIcon name={name} size={11} color="#fff" fill={item.kind === 'like' ? '#fff' : 'none'} />
+          <View key={item.id} style={styles.item}>
+            <TouchableOpacity onPress={goToUser} activeOpacity={0.8}>
+              <View style={styles.avatarWrap}>
+                <UserAvatar user={item.user} size={44} />
+                <View style={[styles.badge, { backgroundColor: color }]}>
+                  <TBIcon name={name} size={11} color="#fff" fill={item.kind === 'like' ? '#fff' : 'none'} />
+                </View>
               </View>
-            </View>
-            <View style={styles.content}>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.content} onPress={goToTarget} activeOpacity={0.7}>
               <Text style={styles.text} numberOfLines={2}>
                 <Text style={styles.bold}>{item.user.name}</Text>
                 {' '}{actionText[item.kind]}
@@ -111,9 +159,16 @@ export default function ActivityScreen() {
                 {item.commentText ? <Text style={styles.comment}> "{item.commentText}"</Text> : ''}
               </Text>
               <Text style={styles.when}>{timeAgo(item.when)}</Text>
-            </View>
-            {item.albumId && <AlbumThumb url={item.albumCoverUrl} size={44} />}
-          </TouchableOpacity>
+            </TouchableOpacity>
+
+            {item.kind === 'follow' ? (
+              <FollowBackBtn userId={item.user._id} initialFollowing={followingIds.has(item.user._id)} />
+            ) : item.albumId ? (
+              <TouchableOpacity onPress={() => router.push(`/album/${item.albumId}`)}>
+                <AlbumThumb url={item.albumCoverUrl} size={44} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
         );
       })}
     </ScrollView>
@@ -133,4 +188,11 @@ const styles = StyleSheet.create({
   when: { fontFamily: F.mono, fontSize: 11, color: C.textFaint, marginTop: 4 },
   empty: { paddingTop: 80, alignItems: 'center', gap: 12 },
   emptyText: { fontSize: 15, color: C.textMuted },
+  followBtn: {
+    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999,
+    backgroundColor: C.text, minWidth: 72, alignItems: 'center',
+  },
+  followBtnActive: { backgroundColor: 'transparent', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+  followBtnText: { fontFamily: F.headlineSemi, fontWeight: '700', fontSize: 13, color: C.bg },
+  followBtnTextActive: { color: C.textMuted },
 });

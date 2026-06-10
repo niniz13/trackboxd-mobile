@@ -47,24 +47,28 @@ function UserRow({ user, isFollowing, onToggle, toggling }: {
   user: UserResult; isFollowing: boolean; onToggle: () => void; toggling: boolean;
 }) {
   return (
-    <View style={styles.userRow}>
+    <TouchableOpacity
+      style={styles.userRow}
+      onPress={() => router.push(`/user/${user.handle}` as any)}
+      activeOpacity={0.75}
+    >
       <UserAvatar user={user} size={44} />
       <View style={{ flex: 1, marginLeft: 12 }}>
         <Text style={styles.userName}>{user.name}</Text>
         <Text style={styles.userHandle}>@{user.handle}</Text>
       </View>
-      <TouchableOpacity
-        style={[styles.followBtn, isFollowing && styles.followBtnActive]}
-        onPress={onToggle}
-        disabled={toggling}>
-        {toggling
-          ? <ActivityIndicator size="small" color={isFollowing ? C.textMuted : C.bg} />
-          : <Text style={[styles.followBtnText, isFollowing && styles.followBtnTextActive]}>
-              {isFollowing ? 'Suivi' : 'Suivre'}
-            </Text>
-        }
-      </TouchableOpacity>
-    </View>
+      {(!isFollowing || toggling) && (
+        <TouchableOpacity
+          style={styles.followBtn}
+          onPress={e => { e.stopPropagation?.(); onToggle(); }}
+          disabled={toggling}>
+          {toggling
+            ? <ActivityIndicator size="small" color={C.bg} />
+            : <Text style={styles.followBtnText}>Suivre</Text>
+          }
+        </TouchableOpacity>
+      )}
+    </TouchableOpacity>
   );
 }
 
