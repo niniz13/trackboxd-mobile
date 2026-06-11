@@ -12,13 +12,21 @@
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#0c0b0e"
       },
       "package": "com.niniz.trackboxdmobile"
     },
     "plugins": [
       "expo-router",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#ff2d95"
+        }
+      ]
     ],
     "extra": {
       "router": {},
