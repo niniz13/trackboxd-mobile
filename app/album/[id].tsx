@@ -376,7 +376,12 @@ export default function AlbumScreen() {
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>Critiques · {textReviews.length}</Text>
               {textReviews.map(r => (
-                <View key={r._id} style={styles.reviewCard}>
+                <TouchableOpacity
+                  key={r._id}
+                  style={styles.reviewCard}
+                  onPress={() => router.push(`/review/${r._id}` as any)}
+                  activeOpacity={0.75}
+                >
                   <View style={styles.reviewHeader}>
                     <UserAvatar user={r.user} size={32} />
                     <View style={styles.flex}>
@@ -386,7 +391,8 @@ export default function AlbumScreen() {
                     <TBStars rating={r.rating} size={12} color="#fff" />
                   </View>
                   <Text style={styles.reviewText}>{r.review}</Text>
-                </View>
+                  <Text style={styles.reviewReplyBtn}>Répondre</Text>
+                </TouchableOpacity>
               ))}
             </View>
           )}
@@ -508,7 +514,8 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   reviewUser: { fontFamily: F.headlineSemi, fontWeight: '700', fontSize: 14, color: C.text },
   reviewHandle: { fontFamily: F.mono, fontSize: 10, color: C.textMuted },
-  reviewText: { fontSize: 14, lineHeight: 21, color: 'rgba(255,255,255,0.8)' },
+  reviewText: { fontSize: 14, lineHeight: 21, color: 'rgba(255,255,255,0.8)', marginBottom: 8 },
+  reviewReplyBtn: { fontFamily: F.mono, fontSize: 11, color: C.textFaint },
   // modal
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.65)' },
   modalSheet: { backgroundColor: '#1a1820', borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 24, paddingBottom: 32 },
