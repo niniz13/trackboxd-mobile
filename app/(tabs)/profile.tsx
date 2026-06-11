@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Image,
   ActivityIndicator, RefreshControl, Modal, TextInput, Alert, FlatList, Dimensions,
@@ -31,8 +32,6 @@ interface UserProfile {
   followerCount: number; followingCount: number;
   highlights: string[]; streak: number; bio: string;
 }
-
-const MONTHS_FR = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
 
 function fmt(iso: string) {
   return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }).toUpperCase();
@@ -198,7 +197,7 @@ export default function ProfileScreen() {
     } finally { setLoading(false); }
   }, [user]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
 
   const onRefresh = async () => { setRefreshing(true); await fetchData(); setRefreshing(false); };
 
@@ -253,15 +252,11 @@ export default function ProfileScreen() {
   const reviewMap = Object.fromEntries(reviews.map(r => [r.albumId, r]));
   const highlightAlbums = highlights.map(id => reviewMap[id]).filter(Boolean);
 
-  const currentYear = new Date().getFullYear();
-  const monthBars = MONTHS_FR.map((m, i) => ({
-    m,
-    v: reviews.filter(r => {
-      const d = new Date(r.createdAt);
-      return d.getFullYear() === currentYear && d.getMonth() === i;
-    }).length,
+  const ratingDist = [5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1, 0.5].map(star => ({
+    star,
+    count: reviews.filter(r => r.rating === star).length,
   }));
-  const maxBar = Math.max(...monthBars.map(b => b.v), 1);
+  const maxRating = Math.max(...ratingDist.map(d => d.count), 1);
 
   const artistCount: Record<string, number> = {};
   reviews.forEach(r => { artistCount[r.albumArtist] = (artistCount[r.albumArtist] ?? 0) + 1; });
@@ -314,15 +309,13 @@ export default function ProfileScreen() {
             </View>
             <View style={{ paddingBottom: 4 }}>
               <Text style={styles.name}>{user.name}</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                <Text style={styles.handle}>@{user.handle}</Text>
-                {streak > 0 && (
-                  <View style={styles.streakBadge}>
-                    <TBIcon name="flame" size={12} color="#ff6a14" fill="#ff6a14" />
-                    <Text style={styles.streakText}>{streak} sem.</Text>
-                  </View>
-                )}
-              </View>
+              <Text style={[styles.handle, { marginTop: 4 }]}>@{user.handle}</Text>
+              {streak > 0 && (
+                <View style={[styles.streakBadge, { marginTop: 6, alignSelf: 'flex-start' }]}>
+                  <TBIcon name="flame" size={12} color="#ff6a14" fill="#ff6a14" />
+                  <Text style={styles.streakText}>{streak} sem.</Text>
+                </View>
+              )}
             </View>
           </View>
           {/* followers / following */}
@@ -387,7 +380,7 @@ export default function ProfileScreen() {
               {([
                 ['diary',   'Journal'],
                 ['favoris', 'Favoris'],
-                ['listes',  `Listes · ${lists.length}`],
+                ['listes',  'Listes'],
                 ['stats',   'Stats'],
               ] as const).map(([key, label]) => (
                 <TouchableOpacity
@@ -469,33 +462,36 @@ export default function ProfileScreen() {
                   </View>
                 </View>
 
-                {/* monthly bar chart */}
-                <Text style={styles.sectionLabel}>Écoutes par mois · {currentYear}</Text>
-                {reviews.length === 0 ? (
-                  <Text style={styles.emptyText}>Aucune écoute journalisée pour l'instant.</Text>
+                {/* rating distribution */}
+                <Text style={styles.sectionLabel}>Notes · {total}</Text>
+                {total === 0 ? (
+                  <Text style={styles.emptyText}>Aucune note pour l'instant.</Text>
                 ) : (
-                  <View style={styles.barChart}>
-                    {monthBars.map(b => (
-                      <View key={b.m} style={styles.barCol}>
-                        {b.v > 0 && <Text style={styles.barCount}>{b.v}</Text>}
-                        <View style={styles.barTrack}>
-                          {b.v > 0 && (
-                            <LinearGradient
-                              colors={['#ff2d95', '#7b2dff']}
-                              style={[styles.barFillGradient, { height: Math.max(6, Math.round((b.v / maxBar) * 100)) }]}
-                            />
-                          )}
+                  <View style={{ marginTop: 14, marginBottom: 24 }}>
+                    {ratingDist.map(({ star, count }) => {
+                      const isHalf = !Number.isInteger(star);
+                      const label = isHalf ? `${Math.floor(star)}½` : `${star}★`;
+                      const isMax = count === maxRating && count > 0;
+                      return (
+                        <View key={star} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                          <Text style={[styles.ratingDistLabel, isMax && { color: C.accent }]}>{label}</Text>
+                          <View style={styles.ratingDistBg}>
+                            <View style={[styles.ratingDistFill, {
+                              width: `${(count / maxRating) * 100}%` as any,
+                              backgroundColor: isHalf ? `${C.accent}77` : C.accent,
+                            }]} />
+                          </View>
+                          <Text style={styles.ratingDistCount}>{count}</Text>
                         </View>
-                        <Text style={styles.barLabel}>{b.m}</Text>
-                      </View>
-                    ))}
+                      );
+                    })}
                   </View>
                 )}
 
                 <Text style={[styles.sectionLabel, { marginTop: 28 }]}>Artistes les plus écoutés</Text>
                 {topArtists.length === 0
                   ? <Text style={styles.emptyText}>Pas encore de données.</Text>
-                  : topArtists.map(([artist, n], i) => (
+                  : <View style={{ marginTop: 14 }}>{topArtists.map(([artist, n], i) => (
                     <View key={artist} style={{ marginBottom: 14 }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
                         <Text style={styles.genreName} numberOfLines={1}>{artist}</Text>
@@ -505,8 +501,7 @@ export default function ProfileScreen() {
                         <View style={[styles.barFill, { width: `${(n / maxArtist) * 100}%` as any, backgroundColor: barColors[i] }]} />
                       </View>
                     </View>
-                  ))
-                }
+                  ))}</View>}
               </View>
             )}
 
@@ -662,12 +657,10 @@ const styles = StyleSheet.create({
   genreCount: { fontFamily: F.mono, fontSize: 12, color: C.textMuted },
   barBg: { height: 9, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 5 },
-  barChart: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', height: 140, marginBottom: 4 },
-  barCol: { width: 22, alignItems: 'center', justifyContent: 'flex-end' },
-  barTrack: { width: 12, height: 100, justifyContent: 'flex-end' },
-  barFillGradient: { width: 12, borderRadius: 4 },
-  barCount: { fontFamily: F.mono, fontSize: 9, color: C.textMuted, marginBottom: 3 },
-  barLabel: { fontFamily: F.mono, fontSize: 8, color: C.textFaint, marginTop: 5, textTransform: 'uppercase' },
+  ratingDistLabel: { fontFamily: F.mono, fontSize: 11, color: 'rgba(255,255,255,0.35)', width: 28, textAlign: 'right' },
+  ratingDistBg: { flex: 1, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.07)', overflow: 'hidden' },
+  ratingDistFill: { height: '100%', borderRadius: 3 },
+  ratingDistCount: { fontFamily: F.mono, fontSize: 10, color: 'rgba(255,255,255,0.3)', width: 20, textAlign: 'right' },
   // listes
   createListBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 8,

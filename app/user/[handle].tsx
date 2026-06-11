@@ -118,16 +118,17 @@ export default function UserProfileScreen() {
   const reviewMap = Object.fromEntries(reviews.map(r => [r.albumId, r]));
   const highlightAlbums = user.highlights.map(id => reviewMap[id]).filter(Boolean);
 
-  const MONTHS_FR = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-  const currentYear = new Date().getFullYear();
-  const monthBars = MONTHS_FR.map((m, i) => ({
-    m,
-    v: reviews.filter(r => {
-      const d = new Date(r.createdAt);
-      return d.getFullYear() === currentYear && d.getMonth() === i;
-    }).length,
+  const ratingDist = [5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1, 0.5].map(star => ({
+    star,
+    count: reviews.filter(r => r.rating === star).length,
   }));
-  const maxBar = Math.max(...monthBars.map(b => b.v), 1);
+  const maxRating = Math.max(...ratingDist.map(d => d.count), 1);
+
+  const artistCount: Record<string, number> = {};
+  reviews.forEach(r => { artistCount[r.albumArtist] = (artistCount[r.albumArtist] ?? 0) + 1; });
+  const topArtists = Object.entries(artistCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const maxArtist  = topArtists[0]?.[1] ?? 1;
+  const barColors  = [C.accent, C.accentPurple, C.accentBlue, '#00e0c6', C.accentYellow];
 
   return (
     <ScrollView
@@ -170,15 +171,13 @@ export default function UserProfileScreen() {
           </View>
           <View style={{ paddingBottom: 4 }}>
             <Text style={styles.name}>{user.name}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
-              <Text style={styles.handle}>@{user.handle}</Text>
-              {stats.streak > 0 && (
-                <View style={styles.streakBadge}>
-                  <TBIcon name="flame" size={12} color="#ff6a14" fill="#ff6a14" />
-                  <Text style={styles.streakText}>{stats.streak} sem.</Text>
-                </View>
-              )}
-            </View>
+            <Text style={[styles.handle, { marginTop: 4 }]}>@{user.handle}</Text>
+            {stats.streak > 0 && (
+              <View style={[styles.streakBadge, { marginTop: 6, alignSelf: 'flex-start' }]}>
+                <TBIcon name="flame" size={12} color="#ff6a14" fill="#ff6a14" />
+                <Text style={styles.streakText}>{stats.streak} sem.</Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -376,23 +375,45 @@ export default function UserProfileScreen() {
             </View>
           </View>
 
-          <Text style={[styles.sectionLabel, { marginTop: 8 }]}>Écoutes par mois · {currentYear}</Text>
-          {reviews.length === 0 ? (
-            <Text style={styles.emptyText}>Aucune donnée.</Text>
+          <Text style={styles.sectionLabel}>Notes · {stats.total}</Text>
+          {stats.total === 0 ? (
+            <Text style={styles.emptyText}>Aucune note pour l'instant.</Text>
           ) : (
-            <View style={styles.barChart}>
-              {monthBars.map(b => (
-                <View key={b.m} style={styles.barCol}>
-                  {b.v > 0 && <Text style={styles.barCount}>{b.v}</Text>}
-                  <View style={styles.barTrack}>
-                    {b.v > 0 && (
-                      <LinearGradient
-                        colors={[accentColor, accentColor + '88']}
-                        style={[styles.barFillGradient, { height: Math.max(6, Math.round((b.v / maxBar) * 100)) }]}
-                      />
-                    )}
+            <View style={{ marginTop: 14, marginBottom: 24 }}>
+              {ratingDist.map(({ star, count }) => {
+                const isHalf = !Number.isInteger(star);
+                const label = isHalf ? `${Math.floor(star)}½` : `${star}★`;
+                const isMax = count === maxRating && count > 0;
+                return (
+                  <View key={star} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                    <Text style={[styles.ratingDistLabel, isMax && { color: accentColor }]}>{label}</Text>
+                    <View style={styles.ratingDistBg}>
+                      <View style={[styles.ratingDistFill, {
+                        width: `${(count / maxRating) * 100}%` as any,
+                        backgroundColor: isHalf ? `${accentColor}77` : accentColor,
+                      }]} />
+                    </View>
+                    <Text style={styles.ratingDistCount}>{count}</Text>
                   </View>
-                  <Text style={styles.barLabel}>{b.m}</Text>
+                );
+              })}
+            </View>
+          )}
+
+          <Text style={[styles.sectionLabel, { marginTop: 4 }]}>Artistes les plus écoutés</Text>
+          {topArtists.length === 0 ? (
+            <Text style={styles.emptyText}>Pas encore de données.</Text>
+          ) : (
+            <View style={{ marginTop: 14 }}>
+              {topArtists.map(([artist, n], i) => (
+                <View key={artist} style={{ marginBottom: 14 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={styles.genreName} numberOfLines={1}>{artist}</Text>
+                    <Text style={styles.genreCount}>{n} album{n > 1 ? 's' : ''}</Text>
+                  </View>
+                  <View style={styles.barBg}>
+                    <View style={[styles.barFill, { width: `${(n / maxArtist) * 100}%` as any, backgroundColor: barColors[i] }]} />
+                  </View>
                 </View>
               ))}
             </View>
@@ -482,11 +503,13 @@ const styles = StyleSheet.create({
   statsCard: { flex: 1, padding: 14, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)' },
   statsCardBig: { fontFamily: F.headline, fontWeight: '800', fontSize: 26, lineHeight: 30, letterSpacing: -0.8 },
   statsCardLabel: { fontFamily: F.mono, fontSize: 8.5, letterSpacing: 0.4, color: C.textMuted, textTransform: 'uppercase', marginTop: 6 },
-  barChart: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', height: 140, marginBottom: 4 },
-  barCol: { width: 22, alignItems: 'center', justifyContent: 'flex-end' },
-  barTrack: { width: 12, height: 100, justifyContent: 'flex-end' },
-  barFillGradient: { width: 12, borderRadius: 4 },
-  barCount: { fontFamily: F.mono, fontSize: 9, color: C.textMuted, marginBottom: 3 },
-  barLabel: { fontFamily: F.mono, fontSize: 8, color: C.textFaint, marginTop: 5, textTransform: 'uppercase' },
+  ratingDistLabel: { fontFamily: F.mono, fontSize: 11, color: 'rgba(255,255,255,0.35)', width: 28, textAlign: 'right' },
+  ratingDistBg: { flex: 1, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.07)', overflow: 'hidden' },
+  ratingDistFill: { height: '100%', borderRadius: 3 },
+  ratingDistCount: { fontFamily: F.mono, fontSize: 10, color: 'rgba(255,255,255,0.3)', width: 20, textAlign: 'right' },
+  barBg: { height: 9, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: 5 },
+  genreName: { fontSize: 14, fontWeight: '600', color: C.text, flex: 1, marginRight: 12 },
+  genreCount: { fontFamily: F.mono, fontSize: 12, color: C.textMuted },
   emptyText: { marginTop: 16, fontSize: 15, color: C.textMuted, textAlign: 'center' },
 });
