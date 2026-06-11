@@ -2,7 +2,8 @@ import * as SecureStore from 'expo-secure-store';
 
 // Change this to your local IP when testing on a physical device
 // e.g. 'http://192.168.1.XX:3000'
-export const API_BASE = 'http://localhost:3000';
+// export const API_BASE = 'http://localhost:3000';
+export const API_BASE = 'https://trackboxd.up.railway.app';
 
 const TOKEN_KEY = 'tb_mobile_token';
 
